@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EasyCodex</string>
+    <string name="connect_title">连接到桌面端</string>
+    <string name="connect_subtitle">请输入 npm run phone 输出的完整桥接地址，包括 token。</string>
+    <string name="bridge_url_hint">http://192.168.1.10:45214/?token=...</string>
+    <string name="connect">连接</string>
+    <string name="invalid_url">请输入有效的 HTTP 或 HTTPS 桥接地址。</string>
+    <string name="connection_failed">无法连接桌面桥接服务。请确认两台设备处于同一网络，且 npm run phone 仍在运行。</string>
+    <string name="retry">重试</string>
+    <string name="reload">重新加载</string>
+    <string name="change_connection">更换连接</string>
+</resources>

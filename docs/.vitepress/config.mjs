@@ -6,9 +6,9 @@ export default defineConfig({
   base: "/codex-remote-control-lab/",
   cleanUrls: true,
   head: [
-    ["link", { rel: "icon", type: "image/svg+xml", href: "/codex-remote-control-lab/favicon.svg" }],
+    ["link", { rel: "icon", type: "image/png", sizes: "32x32", href: "/codex-remote-control-lab/favicon-32.png" }],
     ["link", { rel: "manifest", href: "/codex-remote-control-lab/site.webmanifest" }],
-    ["meta", { name: "theme-color", content: "#15151a" }],
+    ["meta", { name: "theme-color", content: "#f7f8fa" }],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:title", content: "Codex Remote Control Lab" }],
     ["meta", { property: "og:description", content: "Local-first Codex app-server and token-protected LAN phone bridge experiments." }],
@@ -21,7 +21,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "Guide", link: "/guide/phone-bridge" },
-          { text: "Releases", link: "/guide/releases/v0.4.0" },
+          { text: "Releases", link: "/guide/releases/v0.5.0" },
           { text: "Safety", link: "/guide/security" },
           { text: "GitHub", link: "https://github.com/Sunwood-ai-labs/codex-remote-control-lab" },
         ],
@@ -32,6 +32,7 @@ export default defineConfig({
               { text: "Phone Bridge", link: "/guide/phone-bridge" },
               { text: "Protocol Notes", link: "/guide/protocol" },
               { text: "Security", link: "/guide/security" },
+              { text: "v0.5.0 Release", link: "/guide/releases/v0.5.0" },
               { text: "v0.4.0 Release", link: "/guide/releases/v0.4.0" },
               { text: "v0.4.0 Walkthrough", link: "/guide/articles/v0.4.0-mobile-reliability" },
               { text: "v0.3.0 Release", link: "/guide/releases/v0.3.0" },
@@ -53,7 +54,7 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: "ガイド", link: "/ja/guide/phone-bridge" },
-          { text: "リリース", link: "/ja/guide/releases/v0.4.0" },
+          { text: "リリース", link: "/ja/guide/releases/v0.5.0" },
           { text: "安全設計", link: "/ja/guide/security" },
           { text: "GitHub", link: "https://github.com/Sunwood-ai-labs/codex-remote-control-lab" },
         ],
@@ -64,6 +65,7 @@ export default defineConfig({
               { text: "Phone Bridge", link: "/ja/guide/phone-bridge" },
               { text: "Protocol Notes", link: "/ja/guide/protocol" },
               { text: "Security", link: "/ja/guide/security" },
+              { text: "v0.5.0 Release", link: "/ja/guide/releases/v0.5.0" },
               { text: "v0.4.0 Release", link: "/ja/guide/releases/v0.4.0" },
               { text: "v0.4.0 Walkthrough", link: "/ja/guide/articles/v0.4.0-mobile-reliability" },
               { text: "v0.3.0 Release", link: "/ja/guide/releases/v0.3.0" },

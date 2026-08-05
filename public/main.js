@@ -70,7 +70,8 @@ if (params.has("token") && window.history?.replaceState) {
 }
 
 const themeOptions = [
-  { id: "simple", name: "シンプル", detail: "静かなローカルコンソール" },
+  { id: "simple", name: "Codex ライト", detail: "ニュートラル / ミントグリーン" },
+  { id: "codex-dark", name: "Codex ダーク", detail: "チャコール / ソフトグリーン" },
   { id: "cyberpunk", name: "サイバーパンク", detail: "緑の端末文字 / 流れるコード背景" },
   { id: "botanical", name: "ボタニカル", detail: "グリーン / 温かみのあるクリーム" },
   { id: "stigmata", name: "Stigmata", detail: "氷青 / 銀白 / 赤い販売機の残光" },
@@ -78,6 +79,12 @@ const themeOptions = [
 let selectedTheme = localStorage.getItem("codexPhoneTheme") || "simple";
 
 let ws = null;
+let reconnectTimer = null;
+let reconnectAttempt = 0;
+let pageHiddenAt = document.visibilityState === "hidden" ? Date.now() : 0;
+let networkOnline = navigator.onLine !== false;
+const reconnectDelays = [500, 1_000, 2_000, 4_000, 8_000];
+const resumeReconnectAfterMs = 10_000;
 let pendingApproval = null;
 let assistantEntry = null;
 let statusGroup = null;
@@ -1151,6 +1158,7 @@ async function loadBridgeInfo() {
 
 async function loadThreads({ background = false } = {}) {
   if (tokenRequired && !token) return;
+  if (background && !networkOnline) return;
   try {
     const provider = currentThreadProvider();
     const result = await apiGet(`/api/threads?provider=${encodeURIComponent(provider)}`);
@@ -1173,7 +1181,7 @@ async function loadThreads({ background = false } = {}) {
 }
 
 async function refreshSelectedThread() {
-  if (!selectedThread || liveTurnActive || selectedThreadRefreshActive) return;
+  if (!networkOnline || !selectedThread || liveTurnActive || selectedThreadRefreshActive) return;
   const requestedThread = selectedThread;
   const startedReadyNonce = threadReadyNonce.get(requestedThread) || 0;
   selectedThreadRefreshActive = true;
@@ -1955,21 +1963,59 @@ function bindResizeHandle(handle, kind) {
   });
 }
 
-function connect() {
+function clearReconnectTimer() {
+  if (!reconnectTimer) return;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+}
+
+function canReconnect() {
+  if (tokenRequired && !token) return false;
+  return currentThreadProvider() === activeProvider;
+}
+
+function scheduleReconnect({ immediate = false } = {}) {
+  clearReconnectTimer();
+  if (!canReconnect()) return;
+  setReady(false);
+  connectButton.disabled = false;
+  if (!networkOnline) {
+    meta.textContent = "ネットワーク待機中";
+    setRunState("reconnecting", "ネットワークを待っています");
+    return;
+  }
+  const delay = immediate ? 0 : reconnectDelays[Math.min(reconnectAttempt, reconnectDelays.length - 1)];
+  reconnectAttempt += 1;
+  meta.textContent = "再接続中";
+  setRunState("reconnecting", delay ? `再接続中 (${Math.ceil(delay / 1_000)}秒)` : "再接続中");
+  reconnectTimer = window.setTimeout(() => {
+    reconnectTimer = null;
+    connect({ automatic: true });
+  }, delay);
+}
+
+function connect(options = {}) {
+  const automatic = options?.automatic === true;
+  clearReconnectTimer();
   if (tokenRequired && !token) {
     addEntry("error", "URLに token がありません。Mac側に表示されたURLをそのまま開いてください。");
     return;
   }
   if (currentThreadProvider() !== activeProvider) {
-    if (ws) ws.close();
+    const previousSocket = ws;
+    ws = null;
+    previousSocket?.close();
     setReady(false);
     meta.textContent = `${providerLabel(currentThreadProvider())} は ${providerLabel(activeProvider)} bridge では開けません`;
     setRunState("disconnected", "Providerが違います");
     return;
   }
-  if (ws) ws.close();
+  if (!automatic) reconnectAttempt = 0;
+  const previousSocket = ws;
+  ws = null;
+  previousSocket?.close();
   liveTurnActive = false;
-  setRunState("connecting");
+  setRunState(automatic ? "reconnecting" : "connecting");
   prepareThreadHistoryForConnect(selectedThread);
   const selected = threadCache.find((thread) => thread.id === selectedThread);
   threadTitle.textContent = selected ? titleForThread(selected) : "新しい共有thread";
@@ -2002,6 +2048,8 @@ function connect() {
       return;
     }
     if (msg.type === "ready") {
+      reconnectAttempt = 0;
+      clearReconnectTimer();
       setReady(true);
       setWorkspaceMeta(msg);
       setActiveProvider(msg.provider || activeProvider);
@@ -2071,12 +2119,13 @@ function connect() {
 
   socket.addEventListener("close", (event) => {
     if (event.currentTarget !== ws) return;
+    ws = null;
     setReady(false);
     interruptRequestPending = false;
     updateInterruptButton();
     connectButton.disabled = false;
-    meta.textContent = "切断";
-    setRunState("disconnected");
+    meta.textContent = "切断・再接続待機中";
+    scheduleReconnect();
   });
 }
 
@@ -2177,7 +2226,36 @@ mobileThreadsButton.addEventListener("click", () => {
   else openSidebar({ focus: true });
 });
 sidebarScrim.addEventListener("click", () => closeSidebar({ restoreFocus: true }));
-connectButton.addEventListener("click", connect);
+connectButton.addEventListener("click", () => connect());
+window.addEventListener("online", () => {
+  networkOnline = true;
+  scheduleReconnect({ immediate: true });
+  loadThreads({ background: true });
+});
+window.addEventListener("offline", () => {
+  networkOnline = false;
+  clearReconnectTimer();
+  const staleSocket = ws;
+  ws = null;
+  staleSocket?.close();
+  setReady(false);
+  meta.textContent = "ネットワーク待機中";
+  setRunState("reconnecting", "ネットワークを待っています");
+});
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) scheduleReconnect({ immediate: true });
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    pageHiddenAt = Date.now();
+    return;
+  }
+  const hiddenFor = pageHiddenAt ? Date.now() - pageHiddenAt : 0;
+  pageHiddenAt = 0;
+  if (hiddenFor >= resumeReconnectAfterMs || !ws || ws.readyState !== WebSocket.OPEN) {
+    scheduleReconnect({ immediate: true });
+  }
+});
 menuButton.addEventListener("click", () => {
   const desktopPanelVisible =
     window.matchMedia("(min-width: 1101px)").matches && !document.body.classList.contains("hide-artifacts");
@@ -2292,6 +2370,14 @@ document.addEventListener("click", (event) => {
   if (!document.body.classList.contains("show-panel")) return;
   if (window.matchMedia("(min-width: 1101px)").matches) return;
   if (closestElement(event.target, "[data-open-artifact-path]")) return;
+  if (
+    closestElement(
+      event.target,
+      "[data-theme-choice], #settingsButton, #pluginsButton, #automationsButton, #statusButton, #webSearchButton",
+    )
+  ) {
+    return;
+  }
   if (artifactPanel.contains(event.target) || menuButton.contains(event.target)) return;
   closeRightPanel({ restoreFocus: true });
 });
