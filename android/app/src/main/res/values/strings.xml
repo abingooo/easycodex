@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">EasyCodex</string>
+    <string name="connect_title">Connect to your desktop</string>
+    <string name="connect_subtitle">Enter the complete bridge URL printed by npm run phone, including its token.</string>
+    <string name="bridge_url_hint">http://192.168.1.10:45214/?token=...</string>
+    <string name="connect">Connect</string>
+    <string name="invalid_url">Enter a valid HTTP or HTTPS bridge URL.</string>
+    <string name="connection_failed">The desktop bridge is unavailable. Check that both devices are on the same network and that npm run phone is still running.</string>
+    <string name="retry">Retry</string>
+    <string name="reload">Reload</string>
+    <string name="change_connection">Change connection</string>
+</resources>

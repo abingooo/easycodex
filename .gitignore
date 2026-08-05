@@ -12,3 +12,12 @@ docs/.vitepress/cache/
 .phone-workspaces.json
 .uploads/
 tmp/
+.playwright-cli/
+output/playwright/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.jks
+android/*.keystore
+release-assets/

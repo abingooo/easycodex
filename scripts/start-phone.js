@@ -6,7 +6,12 @@ const os = require("os");
 const path = require("path");
 const { execFile, spawn } = require("child_process");
 const WebSocket = require("ws");
-const { bridgeKeyForRequest, shouldDisposeIdleBridge, shouldPromoteBridgeKey } = require("./bridge-state");
+const {
+  bridgeKeyForRequest,
+  shouldDisposeIdleBridge,
+  shouldPromoteBridgeKey,
+  shouldStartFreshThreadAfterResumeError,
+} = require("./bridge-state");
 const { isHistorySyncEnabled, runHistorySync } = require("./history-sync");
 const { bridgeUrls, notifyBridgeUrls, notifyTaskEvent } = require("./phone-notify");
 const { findLiveBridge, readThreadSnapshot } = require("./thread-read");
@@ -64,7 +69,7 @@ function loadEnvFile(filePath) {
 })();
 
 const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-const codexBin = path.join(root, "node_modules", ".bin", "codex");
+const codexEntry = path.join(root, "node_modules", "@openai", "codex", "bin", "codex.js");
 const claudeBin = process.env.CLAUDE_BIN || "claude";
 const claudeProjectsRoot = path.join(os.homedir(), ".claude", "projects");
 const uiPort = Number(process.env.PHONE_UI_PORT || 45214);
@@ -91,6 +96,7 @@ const rateLimitCacheTtlMs = positiveNumber(process.env.PHONE_RATE_LIMIT_CACHE_TT
 const rateLimitRefreshTimeoutMs = positiveNumber(process.env.PHONE_RATE_LIMIT_REFRESH_TIMEOUT_MS, 6000);
 const uploadDir = path.join(root, ".uploads");
 const bridges = new Map();
+const bridgeIdleGraceMs = positiveNumber(process.env.PHONE_BRIDGE_IDLE_GRACE_MS, 15_000);
 let notificationBridgeUrls = [];
 const historyLimit = 80;
 const modelOptions = isClaudeProvider
@@ -104,6 +110,25 @@ const imageExtensions = new Map([
   [".webp", "image/webp"],
   [".svg", "image/svg+xml"],
 ]);
+
+function cancelIdleBridgeDisposal(bridge) {
+  if (!bridge.idleDisposeTimer) return;
+  clearTimeout(bridge.idleDisposeTimer);
+  bridge.idleDisposeTimer = null;
+}
+
+function scheduleIdleBridgeDisposal(bridge, dispose) {
+  cancelIdleBridgeDisposal(bridge);
+  if (!shouldDisposeIdleBridge({ clientCount: bridge.clients.size })) return;
+  bridge.idleDisposeTimer = setTimeout(() => {
+    bridge.idleDisposeTimer = null;
+    if (!shouldDisposeIdleBridge({ clientCount: bridge.clients.size })) return;
+    if (bridges.get(bridge.bridgeKey) !== bridge) return;
+    dispose();
+    bridges.delete(bridge.bridgeKey);
+  }, bridgeIdleGraceMs);
+  bridge.idleDisposeTimer.unref?.();
+}
 
 let workspaceMetaCache = {
   repoName: path.basename(workdir),
@@ -568,7 +593,7 @@ class AppServerRpcClient {
 const appServerClient = new AppServerRpcClient();
 
 function startCodexServer() {
-  const child = spawn(codexBin, ["app-server", "--listen", codexUrl], {
+  const child = spawn(process.execPath, [codexEntry, "app-server", "--listen", codexUrl], {
     cwd: root,
     env: {
       ...process.env,
@@ -1352,11 +1377,13 @@ class SharedBridge {
     this.runState = { state: "connecting", label: "接続中", turnId: null, updatedAt: Date.now() };
     this.streamingStarted = false;
     this.interruptRequested = false;
+    this.idleDisposeTimer = null;
     this.upstream = createUpstreamWebSocket();
     this.bindUpstream();
   }
 
   addClient(browser) {
+    cancelIdleBridgeDisposal(this);
     this.clients.add(browser);
     this.emitTo(browser, "status", { text: "共有Codexブリッジに参加しました。" });
     if (this.ready) {
@@ -1364,10 +1391,7 @@ class SharedBridge {
     }
     browser.on("close", () => {
       this.clients.delete(browser);
-      if (shouldDisposeIdleBridge({ clientCount: this.clients.size, ready: this.ready })) {
-        this.upstream.close();
-        bridges.delete(this.bridgeKey);
-      }
+      scheduleIdleBridgeDisposal(this, () => this.upstream?.close());
     });
   }
 
@@ -1404,6 +1428,7 @@ class SharedBridge {
   }
 
   markUpstreamClosed(message = "Codex接続が切断されました。再接続してください。") {
+    cancelIdleBridgeDisposal(this);
     this.ready = false;
     this.activeTurnId = null;
     this.streamingStarted = false;
@@ -1490,6 +1515,25 @@ class SharedBridge {
       if (pendingMethod === "thread/start" || pendingMethod === "thread/resume") {
         this.pending.delete(msg.id);
         if (msg.error) {
+          if (shouldStartFreshThreadAfterResumeError({ method: pendingMethod, error: msg.error })) {
+            const previousKey = this.bridgeKey;
+            const recoveryKey = `new:recovery:${crypto.randomUUID()}`;
+            if (bridges.get(previousKey) === this) {
+              bridges.delete(previousKey);
+              this.bridgeKey = recoveryKey;
+              bridges.set(recoveryKey, this);
+            }
+            this.requestedThreadId = null;
+            const id = this.request("thread/start", {
+              model,
+              cwd: workdir,
+              approvalPolicy: "on-request",
+              sandbox: "workspace-write",
+            });
+            this.pending.set(id, "thread/start");
+            this.emit("status", { text: "空のthreadを新しいthreadとして再接続中..." });
+            return;
+          }
           this.startupFailed = true;
           this.emit("error", { text: msg.error.message || JSON.stringify(msg.error) });
           return;
@@ -1763,18 +1807,17 @@ class ClaudeBridge {
     this.turnQueue = [];
     this.activeProcess = null;
     this.streamingStarted = false;
+    this.idleDisposeTimer = null;
   }
 
   addClient(browser) {
+    cancelIdleBridgeDisposal(this);
     this.clients.add(browser);
     this.emitTo(browser, "status", { text: "共有Claudeブリッジに参加しました。" });
     this.emitTo(browser, "ready", this.readyPayload());
     browser.on("close", () => {
       this.clients.delete(browser);
-      if (shouldDisposeIdleBridge({ clientCount: this.clients.size })) {
-        this.dispose();
-        bridges.delete(this.bridgeKey);
-      }
+      scheduleIdleBridgeDisposal(this, () => this.dispose());
     });
   }
 
@@ -1814,6 +1857,7 @@ class ClaudeBridge {
   }
 
   dispose() {
+    cancelIdleBridgeDisposal(this);
     this.turnQueue = [];
     this.activeTurnId = null;
     this.streamingStarted = false;
@@ -2308,6 +2352,19 @@ async function main() {
   });
 
   const wss = new WebSocket.Server({ noServer: true });
+  const heartbeatTimer = setInterval(() => {
+    for (const client of wss.clients) {
+      if (client.isAlive === false) {
+        client.terminate();
+        continue;
+      }
+      if (client.readyState !== WebSocket.OPEN) continue;
+      client.isAlive = false;
+      client.ping();
+    }
+  }, 30_000);
+  heartbeatTimer.unref?.();
+  wss.on("close", () => clearInterval(heartbeatTimer));
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname !== "/bridge") {
@@ -2320,7 +2377,13 @@ async function main() {
       return;
     }
     const threadId = url.searchParams.get("thread") || null;
-    wss.handleUpgrade(req, socket, head, (ws) => bindBrowser(ws, phoneToken, threadId));
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.isAlive = true;
+      ws.on("pong", () => {
+        ws.isAlive = true;
+      });
+      bindBrowser(ws, phoneToken, threadId);
+    });
   });
 
   server.listen(uiPort, listenHost, () => {

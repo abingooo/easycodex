@@ -140,6 +140,7 @@ async function mockWebSocket(page, options = {}) {
         window.__sentFrames.push(JSON.parse(frame));
       }
       close() {
+        if (this.readyState === MockWebSocket.CLOSED) return;
         this.readyState = MockWebSocket.CLOSED;
         this.dispatchEvent(new CloseEvent("close"));
       }
@@ -213,6 +214,42 @@ test("web app submit sends prompt through WebSocket and hides raw reconnect payl
   assert.equal(await page.locator("#runState").getAttribute("data-state"), "reconnecting");
 });
 
+test("web app reconnects automatically after the browser bridge disconnects", async (t) => {
+  const server = await startStaticServer();
+  let browser;
+  t.after(async () => {
+    if (browser) await browser.close();
+    await server.close();
+  });
+
+  browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+  await mockApi(page);
+  await mockWebSocket(page);
+  await page.goto(`${server.origin}/?token=${token}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#send:not([disabled])");
+
+  await page.evaluate(() => window.__mockSockets.at(-1).close());
+  await page.waitForFunction(() => document.querySelector("#runState")?.dataset.state === "reconnecting");
+  await page.waitForFunction(
+    () => window.__mockSockets.length >= 2 && document.querySelector("#send")?.disabled === false,
+  );
+
+  const socketUrls = await page.evaluate(() => window.__mockSocketUrls.slice());
+  assert.equal(socketUrls.length, 2);
+  assert.match(socketUrls[1], /thread=thread-web-send/);
+  assert.equal(await page.locator("#runState").getAttribute("data-state"), "ready");
+
+  await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+  assert.equal(await page.locator("#runStateLabel").innerText(), "ネットワークを待っています");
+  assert.equal(await page.locator("#send").isDisabled(), true);
+  await page.evaluate(() => window.dispatchEvent(new Event("online")));
+  await page.waitForFunction(
+    () => window.__mockSockets.length >= 3 && document.querySelector("#send")?.disabled === false,
+  );
+  assert.equal(await page.locator("#runState").getAttribute("data-state"), "ready");
+});
+
 test("background thread polling stays quiet after browser bridge disconnects", async (t) => {
   const server = await startStaticServer();
   let browser;
@@ -230,13 +267,13 @@ test("background thread polling stays quiet after browser bridge disconnects", a
   await page.waitForSelector("#send:not([disabled])");
 
   await page.evaluate(() => window.__closeMockSockets());
-  await page.waitForFunction(() => document.querySelector("#runState")?.dataset.state === "disconnected");
+  await page.waitForFunction(() => document.querySelector("#runState")?.dataset.state === "reconnecting");
   apiState.failThreads = true;
   await page.evaluate(() => loadThreads({ background: true }));
 
   const logText = await page.locator("#log").innerText();
   assert.doesNotMatch(logText, /thread一覧を読めませんでした: Failed to fetch/);
-  assert.equal(await page.locator("#runState").getAttribute("data-state"), "disconnected");
+  assert.equal(await page.locator("#runState").getAttribute("data-state"), "reconnecting");
 });
 
 test("mobile text inputs keep iOS-safe font sizes without disabling zoom", async (t) => {
@@ -274,6 +311,33 @@ test("mobile text inputs keep iOS-safe font sizes without disabling zoom", async
   await page.click("#expandPromptButton");
   await page.waitForSelector("#promptModal:not(.hidden)");
   assert.ok((await fontSize("#promptModalInput")) >= 16, "expanded prompt should not trigger iOS focus zoom");
+});
+
+test("mobile settings opened from the thread drawer stays visible", async (t) => {
+  const server = await startStaticServer();
+  let browser;
+  t.after(async () => {
+    if (browser) await browser.close();
+    await server.close();
+  });
+
+  browser = await chromium.launch();
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+  await mockApi(page);
+  await mockWebSocket(page);
+  await page.goto(`${server.origin}/?token=${token}`, { waitUntil: "networkidle" });
+  await page.waitForSelector("#send:not([disabled])");
+
+  await page.click("#mobileThreads");
+  await page.click("#settingsButton");
+
+  assert.equal(await page.locator("body").evaluate((node) => node.classList.contains("show-panel")), true);
+  await page.waitForSelector(".artifact-panel:not([aria-hidden='true'])");
+  const darkTheme = page.getByRole("button", { name: /Codex ダーク/ });
+  await darkTheme.waitFor();
+  await darkTheme.click();
+  assert.equal(await page.locator("body").evaluate((node) => node.classList.contains("show-panel")), true);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "codex-dark");
 });
 
 test("mobile artifact preview stays open when launched from chat and panel rows", async (t) => {
