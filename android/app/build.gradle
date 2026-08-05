@@ -1,0 +1,43 @@
+plugins {
+    id "com.android.application"
+}
+
+def releaseKeystore = System.getenv("EASYCODEX_KEYSTORE")
+
+android {
+    namespace "com.abingooo.easycodex"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.abingooo.easycodex"
+        minSdk 26
+        targetSdk 35
+        versionCode 5
+        versionName "0.5.0"
+    }
+
+    signingConfigs {
+        release {
+            if (releaseKeystore) {
+                storeFile file(releaseKeystore)
+                storePassword System.getenv("EASYCODEX_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("EASYCODEX_KEY_ALIAS") ?: "easycodex"
+                keyPassword System.getenv("EASYCODEX_KEY_PASSWORD") ?: System.getenv("EASYCODEX_KEYSTORE_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
+        }
+        release {
+            minifyEnabled false
+            if (releaseKeystore) {
+                signingConfig signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+}

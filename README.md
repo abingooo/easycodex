@@ -54,6 +54,16 @@ http://192.168.11.8:45214/?token=...
 
 Open that exact URL from a phone connected to the same Wi-Fi/LAN.
 
+### Android APK
+
+Download `EasyCodex-v0.5.0.apk` from the GitHub Release for a dedicated Android client. The desktop bridge is still required: run `npm run phone`, then enter the complete printed URL, including `?token=...`, on first launch. The app remembers the connection locally and provides reload and change-connection controls.
+
+The APK supports Android 8.0 and newer. To build a debug APK locally with an installed Android SDK, run:
+
+```bash
+npm run android:debug
+```
+
 For repeatable local settings, copy the example file and edit it:
 
 ```bash
@@ -84,7 +94,9 @@ The safer boundary is intentional: Codex's app-server remains bound to localhost
 
 ```bash
 npm run check
+npm test
 npm run docs:build
+npm run android:debug
 npm audit --omit=dev
 ```
 
@@ -260,7 +272,7 @@ See [SECURITY.md](SECURITY.md) for the public-safe checklist.
 
 - [English docs](https://sunwood-ai-labs.github.io/codex-remote-control-lab/)
 - [日本語ドキュメント](https://sunwood-ai-labs.github.io/codex-remote-control-lab/ja/)
-- [v0.4.0 release notes](https://sunwood-ai-labs.github.io/codex-remote-control-lab/guide/releases/v0.4.0)
+- [v0.5.0 release notes](docs/guide/releases/v0.5.0.md)
 - [Phone bridge guide](docs/guide/phone-bridge.md)
 - [Protocol notes](docs/guide/protocol.md)
 - [Security model](docs/guide/security.md)
@@ -270,6 +282,8 @@ See [SECURITY.md](SECURITY.md) for the public-safe checklist.
 
 ```text
 public/              Browser UI served by the phone bridge
+android/             Native Android client and Gradle wrapper
+assets/branding/     Source application icon
 scripts/             Codex app-server probe and bridge launcher
 docs/                VitePress docs and screenshot assets
 docs/assets/         UI verification screenshots

@@ -54,6 +54,16 @@ http://192.168.11.8:45214/?token=...
 
 同じ Wi-Fi/LAN 上のスマホで、その URL をそのまま開きます。
 
+### Android APK
+
+専用 Android クライアントは GitHub Release の `EasyCodex-v0.5.0.apk` から入手できます。デスクトップ側の bridge は引き続き必要です。`npm run phone` を実行し、初回起動時に `?token=...` を含む表示 URL 全体を入力してください。接続先は端末内に保存され、再読み込みと接続先変更をアプリから行えます。
+
+APK は Android 8.0 以降に対応します。Android SDK が導入済みの環境では、次のコマンドで debug APK をビルドできます。
+
+```bash
+npm run android:debug
+```
+
 繰り返し使う local 設定は、example をコピーして編集できます。
 
 ```bash
@@ -84,7 +94,9 @@ phone browser -> http://Mac-LAN-IP:45214 -> Node bridge -> ws://127.0.0.1:45213 
 
 ```bash
 npm run check
+npm test
 npm run docs:build
+npm run android:debug
 npm audit --omit=dev
 ```
 
@@ -260,7 +272,7 @@ Mobile flow:
 
 - [English docs](https://sunwood-ai-labs.github.io/codex-remote-control-lab/)
 - [日本語ドキュメント](https://sunwood-ai-labs.github.io/codex-remote-control-lab/ja/)
-- [v0.4.0 リリースノート](https://sunwood-ai-labs.github.io/codex-remote-control-lab/ja/guide/releases/v0.4.0)
+- [v0.5.0 リリースノート](docs/ja/guide/releases/v0.5.0.md)
 - [Phone bridge guide](docs/ja/guide/phone-bridge.md)
 - [Protocol notes](docs/ja/guide/protocol.md)
 - [Security model](docs/ja/guide/security.md)
@@ -270,6 +282,8 @@ Mobile flow:
 
 ```text
 public/              Phone bridge が配信する browser UI
+android/             native Android client と Gradle wrapper
+assets/branding/     application icon の source asset
 scripts/             Codex app-server probe と bridge launcher
 docs/                VitePress docs と screenshot assets
 docs/assets/         UI verification screenshots

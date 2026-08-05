@@ -5,13 +5,13 @@
   "start_url": "/codex-remote-control-lab/",
   "scope": "/codex-remote-control-lab/",
   "display": "standalone",
-  "background_color": "#15151a",
-  "theme_color": "#15151a",
+  "background_color": "#f7f8fa",
+  "theme_color": "#f7f8fa",
   "icons": [
     {
-      "src": "/codex-remote-control-lab/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/codex-remote-control-lab/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png",
       "purpose": "any"
     }
   ]

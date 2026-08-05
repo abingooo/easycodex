@@ -1,7 +1,12 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const { bridgeKeyForRequest, shouldDisposeIdleBridge, shouldPromoteBridgeKey } = require("./bridge-state");
+const {
+  bridgeKeyForRequest,
+  shouldDisposeIdleBridge,
+  shouldPromoteBridgeKey,
+  shouldStartFreshThreadAfterResumeError,
+} = require("./bridge-state");
 
 test("new thread bridge requests share the startup URL bridge", () => {
   assert.equal(bridgeKeyForRequest("", "a"), "new:shared");
@@ -23,4 +28,19 @@ test("new bridge keys promote to the real thread id once ready", () => {
   assert.equal(shouldPromoteBridgeKey({ bridgeKey: "new:a", threadId: "thread-123" }), true);
   assert.equal(shouldPromoteBridgeKey({ bridgeKey: "thread-123", threadId: "thread-123" }), false);
   assert.equal(shouldPromoteBridgeKey({ bridgeKey: "new:a", threadId: "" }), false);
+});
+
+test("missing rollout resume errors fall back to a fresh thread", () => {
+  assert.equal(
+    shouldStartFreshThreadAfterResumeError({ method: "thread/resume", error: { message: "no rollout found for thread id abc" } }),
+    true,
+  );
+  assert.equal(
+    shouldStartFreshThreadAfterResumeError({ method: "thread/resume", error: { message: "connection refused" } }),
+    false,
+  );
+  assert.equal(
+    shouldStartFreshThreadAfterResumeError({ method: "thread/start", error: { message: "no rollout found" } }),
+    false,
+  );
 });

@@ -1,11 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import * as esbuild from "esbuild";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-const repoRoot = path.resolve(new URL("..", import.meta.url).pathname);
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 const sourcePath = path.join(repoRoot, "src/ui/Shell.jsx");
 const outputPath = path.join(repoRoot, "public/index.html");
 const checkOnly = process.argv.includes("--check");
@@ -36,11 +36,11 @@ function renderDocument(shell) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Codex Remote</title>
-    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png" />
     <link rel="apple-touch-icon" href="apple-touch-icon.png" />
     <link rel="manifest" href="site.webmanifest" />
-    <meta name="theme-color" content="#15151a" />
+    <meta name="theme-color" content="#f7f8fa" />
     <link rel="stylesheet" href="/style.css" />
   </head>
   <body class="hide-artifacts">
@@ -58,7 +58,8 @@ const html = renderDocument(shell);
 
 if (checkOnly) {
   const current = await fs.readFile(outputPath, "utf8");
-  if (current !== html) {
+  const normalizeLineEndings = (value) => value.replaceAll("\r\n", "\n");
+  if (normalizeLineEndings(current) !== normalizeLineEndings(html)) {
     console.error("public/index.html is out of date. Run npm run build:ui.");
     process.exit(1);
   }

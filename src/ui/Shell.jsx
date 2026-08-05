@@ -91,7 +91,10 @@ function Sidebar() {
 function Header() {
   return (
     <header className="titlebar">
-      <button type="button" className="mobile-toggle" id="mobileThreads" aria-controls="threadSidebar" aria-expanded="false">チャット</button>
+      <button type="button" className="mobile-toggle" id="mobileThreads" aria-controls="threadSidebar" aria-expanded="false">
+        <PanelLeft size={17} strokeWidth={2} aria-hidden="true" />
+        <span>チャット</span>
+      </button>
       <div className="title-stack">
         <h1 id="threadTitle">Codex Remote</h1>
         <p id="meta">接続準備中</p>
